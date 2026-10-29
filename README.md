@@ -1,97 +1,187 @@
-# ISL-LWS Lightweight Cipher
+# ISL-LWS Lightweight Block Cipher
 
-ISL-LWS is a 64-bit lightweight block cipher with an 80-bit key, implemented in pure Python. It uses a 4-branch Feistel-like structure with two 4-bit S-boxes, a nibble-level P-box, and a rotating key schedule over 16 rounds.
+A Python implementation of a lightweight block cipher developed as part of the CSE461 Computer Security course at MSA University.
 
-> **Disclaimer:** This project was built for educational and coursework purposes. It has not been cryptanalyzed and must not be used to protect real data.
+The project is based on the research paper *Development of a New Lightweight Encryption Algorithm*. It implements encryption, decryption, a key schedule, and basic tests to examine the implementation's behavior.
+
+> **Educational use only:** This implementation has not undergone comprehensive cryptanalysis and must not be used to protect sensitive real-world data.
+
+## Overview
+
+A block cipher encrypts a fixed-size block of data using a secret key.
+
+This implementation processes 64-bit plaintext blocks with an 80-bit key and performs 16 rounds of transformations. It uses XOR operations, bit rotations, substitution boxes (S-boxes), a permutation box (P-box), and a four-word internal state.
+
+The implementation includes encryption and decryption functions and tests whether decryption recovers the original plaintext.
+
+**Important:** The implementation has not been independently verified as an exact reproduction of every step in the referenced research paper.
 
 ## Specifications
 
-| Property        | Value                          |
-|-----------------|--------------------------------|
-| Block size      | 64 bits                        |
-| Key size        | 80 bits                        |
-| Rounds          | 16                             |
-| Word size       | 16 bits (four words per block) |
-| Structure       | 4-branch Feistel-like network  |
-| Language        | Python 3 (no dependencies)     |
+| Property | Value |
+|---|---|
+| Block size | 64 bits |
+| Key size | 80 bits |
+| Number of rounds | 16 |
+| Internal word size | 16 bits |
+| Internal state | Four 16-bit words |
+| Language | Python 3 |
+| External dependencies | None |
 
-## How it works
+## How It Works
 
-The 64-bit plaintext is split into four 16-bit words: `L1`, `L2`, `R1`, `R2`.
+### 1. Block Representation
 
-**Each round:**
+The plaintext is divided into four 16-bit words:
 
-1. XOR the round key into `L1`.
-2. Compute `temp = F(L1, L2)`.
-3. Update the right words: `R1 = S(R1) XOR temp` and `R2 = S(R2) XOR temp`.
-4. Swap `L1 <-> R1` and `L2 <-> R2`.
+- `L1`
+- `L2`
+- `R1`
+- `R2`
 
-After 16 rounds, a final key is XORed into all four words, and the words are concatenated into the 64-bit ciphertext.
+These words form the internal state that is transformed during encryption.
 
-**Round function `F(a, b)`:**
+The implementation accepts plaintext and key values as integers. It does not directly encrypt text strings or implement arbitrary-length message processing, text encoding, or padding.
 
+### 2. Encryption Operations
+
+The implementation uses the following operations:
+
+- **XOR:** Combines two bit patterns using exclusive OR.
+- **Bit rotation:** Rotates the bits of a 16-bit word.
+- **S-box substitution:** Replaces each 4-bit nibble using a lookup table.
+- **P-box permutation:** Rearranges nibble positions.
+- **Round transformations:** Update and swap the internal state over 16 rounds.
+
+The round function is implemented as:
+
+```python
+F(a, b) = PBOX(SBOX(rotate_left(a, 5) ^ b))
 ```
-F(a, b) = PBOX( SBOX( rotl16(a, 5) XOR b ) )
+
+The code alternates between two S-box lookup tables when processing the nibbles of a 16-bit word.
+
+The P-box uses the mapping:
+
+```python
+PBOX = [3, 2, 0, 1]
 ```
 
-**Components:**
+### 3. Key Schedule
 
-- **S-box layer:** alternates `SBOX1` and `SBOX2` across the four nibbles of a 16-bit word. Both S-boxes are bijective.
-- **P-box layer:** permutes nibble positions using `PBOX = [3, 2, 0, 1]`.
-- **Key schedule:** the 80-bit key register is rotated left by 61 bits each round, and a round counter is XORed in. The top 16 bits of the register become the round key, so every key bit influences the round keys. 16 round keys and 1 final key are produced.
+The `generate_keys()` function takes an integer key and derives 16 round keys and one final key.
+
+The current implementation:
+
+1. Masks the key to 80 bits.
+2. Extracts the top 16 bits of the key register.
+3. Rotates the 80-bit register left by 61 bits.
+4. Injects a round counter using XOR.
+5. Repeats the process to generate the round keys and final key.
+
+The final key is XORed with all four 16-bit state words after the 16 rounds. This is the final whitening step in the current implementation.
+
+**Implementation note:** The key schedule, round-key usage, and final whitening have not been verified as equivalent to the corresponding steps in the original research paper.
+
+## Requirements
+
+- Python 3
+- No external Python packages required
 
 ## Usage
+
+Import `encrypt` and `decrypt` from `isl_lws.py`:
 
 ```python
 from isl_lws import encrypt, decrypt
 
-plaintext = 0x0123456789ABCDEF           # 64-bit block
-key       = 0x00112233445566778899       # 80-bit key
+# 64-bit plaintext block
+plaintext = 0x0123456789ABCDEF
 
+# 80-bit key
+key = 0x00112233445566778899
+
+# Encrypt
 ciphertext = encrypt(plaintext, key)
-recovered  = decrypt(ciphertext, key)
+
+# Decrypt
+recovered = decrypt(ciphertext, key)
 
 print(f"Ciphertext: 0x{ciphertext:016X}")
+print(f"Recovered:  0x{recovered:016X}")
+
 assert recovered == plaintext
 ```
 
-Run the built-in test cases:
+For the intended input sizes, plaintext values should fit within 64 bits and key values within 80 bits. The current implementation does not explicitly reject out-of-range inputs.
+
+## Running the Tests
+
+Run the built-in test cases from the repository directory:
 
 ```bash
 python isl_lws.py
 ```
 
-## Test results
+The script tests four plaintext/key combinations:
 
-| Test case                    | Plaintext            | Key                      | Ciphertext           |
-|------------------------------|----------------------|--------------------------|----------------------|
-| 1: All zeros                 | `0000000000000000`   | `00000000000000000000`   | `A25CA253C62B5605`   |
-| 2: Plaintext 1-bit flip      | `0000000000000001`   | `FFFFFFFFFFFFFFFFFFFF`   | `212FF5016197097A`   |
-| 3A: Base key                 | `FFFFFFFFFFFFFFFF`   | `00000000000000000000`   | `7EE80EEA6D592D7E`   |
-| 3B: Key 1-bit flip           | `FFFFFFFFFFFFFFFF`   | `00000000000000000001`   | `2151B15652F6E326`   |
+1. All-zero plaintext and key.
+2. A plaintext with one bit set and an all-ones key.
+3. An all-ones plaintext and an all-zero key.
+4. An all-ones plaintext and a key with one bit set.
 
-**Avalanche behavior:**
+Each test checks that decrypting the generated ciphertext recovers the original plaintext.
 
-- Flipping 1 key bit (3A vs 3B) changes 43 of 64 ciphertext bits.
-- Flipping 1 plaintext bit (all zeros, key 0) changes 35 of 64 ciphertext bits.
+The script also compares ciphertexts to measure the effect of changing one plaintext bit or one key bit.
 
-An ideal cipher changes about 32 bits on average.
+## Test Results and Avalanche Measurements
 
-Every test case is also checked to decrypt back to its original plaintext.
+The recorded measurements are:
 
-## Project structure
+| Measurement | Changed input | Different ciphertext bits |
+|---|---|---|
+| Key avalanche | One key bit changed | 43 out of 64 |
+| Plaintext avalanche | One plaintext bit changed | 35 out of 64 |
 
-```
-.
-├── isl_lws.py    # cipher implementation, decryption, and test cases
+For an idealized block cipher, changing one input bit is expected to change approximately half of the ciphertext bits on average.
+
+These results are observations from selected inputs, not proof of security. They do not establish resistance to brute-force attacks, differential cryptanalysis, linear cryptanalysis, or other cryptographic attacks.
+
+Run `python isl_lws.py` to execute the current tests and obtain the ciphertext outputs and measurements directly from the implementation.
+
+## Limitations
+
+- The implementation operates on fixed-size numerical blocks, not arbitrary-length messages.
+- Text encoding, padding, and message framing are not implemented.
+- Input sizes are not explicitly validated by the encryption and decryption functions.
+- The built-in tests cover selected examples rather than exhaustive correctness testing.
+- Avalanche measurements alone cannot establish cryptographic security.
+- The implementation has not undergone comprehensive cryptanalysis.
+- Exact equivalence to the original research paper has not been established.
+- The implementation should not be used for real-world data protection.
+
+## Project Structure
+
+```text
+isl-lws-lightweight-cipher/
+├── isl_lws.py
 └── README.md
 ```
 
+## References
+
+Khompysh, A., Kapalova, N., Lizunov, O., Dyusenbayev, D., & Sakan, K. (2023). *Development of a New Lightweight Encryption Algorithm*. **International Journal of Advanced Computer Science and Applications, 14**(5).
+
+- **DOI:** https://doi.org/10.14569/IJACSA.2023.0140548
+- **Publisher page:** https://thesai.org/Publications/ViewPaper?Code=IJACSA&Issue=5&SerialNo=48&Volume=14
+
+The paper is the research reference identified by the CSE461 course specification. The implementation's exact equivalence to the paper has not been independently established.
+
 ## Authors
 
-- Omar Shibl (ID: 231147)
-- Ahmed Walid (ID: 220953)
+- Omar Shibl
+- Ahmed Walid
 
 ## License
 
-This project is licensed under the MIT License.
+Add a valid `LICENSE` file before claiming that the project is distributed under the MIT License. If the repository does not contain a license file, the licensing terms have not been established by this README.

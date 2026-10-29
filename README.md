@@ -6,6 +6,14 @@ The project is based on the paper *Development of a New Lightweight Encryption A
 
 > **Educational use only.** This implementation has not been cryptanalysed and must not be used to protect real data.
 
+## Project Files
+
+| File | Description |
+|---|---|
+| `isl_lws.py` | Python implementation of the cipher (interactive mode and `--tests`) |
+| `ISL-LWS_Documentation.docx` | Project report: algorithm description, implementation details, screenshots and test cases |
+| `README.md` | This file |
+
 ## Authors
 
 - Omar Shibl (ID: 231147)

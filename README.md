@@ -11,7 +11,7 @@ The project is based on the paper *Development of a New Lightweight Encryption A
 | File | Description |
 |---|---|
 | `isl_lws.py` | Python implementation of the cipher (interactive mode and `--tests`) |
-| `ISL-LWS_Documentation.docx` | Project report: algorithm description, implementation details, screenshots and test cases |
+| `ISL-LWS_Documentation_Corrected.docx` | Project report: algorithm description, implementation details, screenshots and test cases |
 | `README.md` | This file |
 
 ## Authors
@@ -95,7 +95,7 @@ Run `python isl_lws.py --tests` to reproduce these results.
 - **Stage 1 differs from the paper's text.** The paper says the 64-bit plaintext block is XORed with the round key before it is split into four sub-blocks. This implementation instead XORs a 16-bit round key into `L1` only, at the start of each round.
 - **Encryption only.** There is no decryption function.
 - **Integers only.** Plaintext and key are handled as integers (hex input). There is no text encoding, padding, or support for messages longer than one block.
-- **Not verified against official test vectors.** The implementation follows the paper's structure but has not been checked against reference vectors.
+- **Not verified against official test vectors.** The implementation follows the paper's overall structure, with the simplifications listed above, but has not been checked against reference vectors.
 
 ## Reference
 

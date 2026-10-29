@@ -1,20 +1,15 @@
 # ISL-LWS Lightweight Block Cipher
 
-A Python implementation of a lightweight block cipher developed as part of the CSE461 Computer Security course at MSA University.
+A Python implementation of a lightweight block cipher, developed for the CSE461 Computer Security course at MSA University.
 
-The project is based on the research paper *Development of a New Lightweight Encryption Algorithm*. It implements encryption, decryption, a key schedule, and basic tests to examine the implementation's behavior.
+The project is based on the paper *Development of a New Lightweight Encryption Algorithm* (Khompysh et al., IJACSA, 2023). It implements the encryption process with a 64-bit block, an 80-bit key and 16 rounds, and prints the intermediate state after every round.
 
-> **Educational use only:** This implementation has not undergone comprehensive cryptanalysis and must not be used to protect sensitive real-world data.
+> **Educational use only.** This implementation has not been cryptanalysed and must not be used to protect real data.
 
-## Overview
+## Authors
 
-A block cipher encrypts a fixed-size block of data using a secret key.
-
-This implementation processes 64-bit plaintext blocks with an 80-bit key and performs 16 rounds of transformations. It uses XOR operations, bit rotations, substitution boxes (S-boxes), a permutation box (P-box), and a four-word internal state.
-
-The implementation includes encryption and decryption functions and tests whether decryption recovers the original plaintext.
-
-**Important:** The implementation has not been independently verified as an exact reproduction of every step in the referenced research paper.
+- Omar Shibl (ID: 231147)
+- Ahmed Walid (ID: 220953)
 
 ## Specifications
 
@@ -22,166 +17,78 @@ The implementation includes encryption and decryption functions and tests whethe
 |---|---|
 | Block size | 64 bits |
 | Key size | 80 bits |
-| Number of rounds | 16 |
-| Internal word size | 16 bits |
-| Internal state | Four 16-bit words |
-| Language | Python 3 |
-| External dependencies | None |
+| Rounds | 16 |
+| Internal word size | 16 bits (four words: `L1`, `L2`, `R1`, `R2`) |
+| S-boxes | Two 4-bit S-boxes (`SBOX1`, `SBOX2`), used alternately |
+| P-box | `[3, 2, 0, 1]` (nibble permutation) |
+| Language | Python 3, no external dependencies |
+
+## How to Run
+
+```
+python isl_lws.py            # interactive mode
+python isl_lws.py --tests    # run the built-in test cases
+```
+
+**Interactive mode** asks for a 64-bit plaintext and an 80-bit key as hex strings, prints the state after each of the 16 rounds, and then prints the ciphertext.
+
+Example (plaintext `1234567890ABCDEF`, key `1234567890ABCDEF1234`):
+
+```
+=== ENCRYPTION START ===
+--- Round 1 ---
+State: 0xc54248c700005678
+...
+--- Round 16 ---
+State: 0x467a24fcf43a7fe4
+
+=== ENCRYPTION END ===
+
+Ciphertext: 0x467a24fcf43a6dd0
+```
 
 ## How It Works
 
-### 1. Block Representation
+The 64-bit plaintext is split into four 16-bit words `[L1 | L2 | R1 | R2]`. Each round (i = 0 to 15) does:
 
-The plaintext is divided into four 16-bit words:
+1. **Key mixing:** `L1 = L1 XOR K[i]`
+2. **Round function:** `temp = F(L1, L2)`, where `F(a, b) = P-box(S-box(rotate_left(a, 5) XOR b))`
+3. **Right-side substitution:** `R1 = S-box(R1) XOR temp` and `R2 = S-box(R2) XOR temp`
+4. **Swap:** `L1 <-> R1` and `L2 <-> R2`
 
-- `L1`
-- `L2`
-- `R1`
-- `R2`
+After round 16, a final 16-bit key is XORed into `R2`, and the four words are joined into the 64-bit ciphertext.
 
-These words form the internal state that is transformed during encryption.
+The S-box layer splits a 16-bit word into four nibbles. Nibbles at positions 0 and 2 use `SBOX1`, and nibbles at positions 1 and 3 use `SBOX2`. The P-box layer then moves nibble `i` to position `PBOX[i]`.
 
-The implementation accepts plaintext and key values as integers. It does not directly encrypt text strings or implement arbitrary-length message processing, text encoding, or padding.
+### Key Schedule
 
-### 2. Encryption Operations
+`generate_keys()` uses a simplified **sliding-window** schedule. For round `i`, the round key is
 
-The implementation uses the following operations:
-
-- **XOR:** Combines two bit patterns using exclusive OR.
-- **Bit rotation:** Rotates the bits of a 16-bit word.
-- **S-box substitution:** Replaces each 4-bit nibble using a lookup table.
-- **P-box permutation:** Rearranges nibble positions.
-- **Round transformations:** Update and swap the internal state over 16 rounds.
-
-The round function is implemented as:
-
-```python
-F(a, b) = PBOX(SBOX(rotate_left(a, 5) ^ b))
+```
+K[i] = (key >> (64 - 4*i)) & 0xFFFF
 ```
 
-The code alternates between two S-box lookup tables when processing the nibbles of a 16-bit word.
+and the final key is `key & 0xFFFF`. This is a simplified variant. In the paper, the 80-bit key is split into five 16-bit sub-blocks, and the round keys are derived using a 4-bit S-box and addition modulo 2^16. This implementation does not do that.
 
-The P-box uses the mapping:
+## Test Cases
 
-```python
-PBOX = [3, 2, 0, 1]
-```
+Run `python isl_lws.py --tests` to reproduce these results.
 
-### 3. Key Schedule
-
-The `generate_keys()` function takes an integer key and derives 16 round keys and one final key.
-
-The current implementation:
-
-1. Masks the key to 80 bits.
-2. Extracts the top 16 bits of the key register.
-3. Rotates the 80-bit register left by 61 bits.
-4. Injects a round counter using XOR.
-5. Repeats the process to generate the round keys and final key.
-
-The final key is XORed with all four 16-bit state words after the 16 rounds. This is the final whitening step in the current implementation.
-
-**Implementation note:** The key schedule, round-key usage, and final whitening have not been verified as equivalent to the corresponding steps in the original research paper.
-
-## Requirements
-
-- Python 3
-- No external Python packages required
-
-## Usage
-
-Import `encrypt` and `decrypt` from `isl_lws.py`:
-
-```python
-from isl_lws import encrypt, decrypt
-
-# 64-bit plaintext block
-plaintext = 0x0123456789ABCDEF
-
-# 80-bit key
-key = 0x00112233445566778899
-
-# Encrypt
-ciphertext = encrypt(plaintext, key)
-
-# Decrypt
-recovered = decrypt(ciphertext, key)
-
-print(f"Ciphertext: 0x{ciphertext:016X}")
-print(f"Recovered:  0x{recovered:016X}")
-
-assert recovered == plaintext
-```
-
-For the intended input sizes, plaintext values should fit within 64 bits and key values within 80 bits. The current implementation does not explicitly reject out-of-range inputs.
-
-## Running the Tests
-
-Run the built-in test cases from the repository directory:
-
-```bash
-python isl_lws.py
-```
-
-The script tests four plaintext/key combinations:
-
-1. All-zero plaintext and key.
-2. A plaintext with one bit set and an all-ones key.
-3. An all-ones plaintext and an all-zero key.
-4. An all-ones plaintext and a key with one bit set.
-
-Each test checks that decrypting the generated ciphertext recovers the original plaintext.
-
-The script also compares ciphertexts to measure the effect of changing one plaintext bit or one key bit.
-
-## Test Results and Avalanche Measurements
-
-The recorded measurements are:
-
-| Measurement | Changed input | Different ciphertext bits |
-|---|---|---|
-| Key avalanche | One key bit changed | 43 out of 64 |
-| Plaintext avalanche | One plaintext bit changed | 35 out of 64 |
-
-For an idealized block cipher, changing one input bit is expected to change approximately half of the ciphertext bits on average.
-
-These results are observations from selected inputs, not proof of security. They do not establish resistance to brute-force attacks, differential cryptanalysis, linear cryptanalysis, or other cryptographic attacks.
-
-Run `python isl_lws.py` to execute the current tests and obtain the ciphertext outputs and measurements directly from the implementation.
+| Test | Plaintext | Key | Ciphertext |
+|---|---|---|---|
+| 1 (all zeros) | `0000000000000000` | `00000000000000000000` | `F7F1F7F140A640A6` |
+| 2 (plaintext 1-bit flip) | `0000000000000001` | `FFFFFFFFFFFFFFFFFFFF` | `643EB8BBAF3B1C86` |
+| 3A (base key) | `FFFFFFFFFFFFFFFF` | `00000000000000000000` | `69DD69DD84F484F4` |
+| 3B (key 1-bit flip) | `FFFFFFFFFFFFFFFF` | `00000000000000000001` | `69DD69DD84F484F5` |
 
 ## Limitations
 
-- The implementation operates on fixed-size numerical blocks, not arbitrary-length messages.
-- Text encoding, padding, and message framing are not implemented.
-- Input sizes are not explicitly validated by the encryption and decryption functions.
-- The built-in tests cover selected examples rather than exhaustive correctness testing.
-- Avalanche measurements alone cannot establish cryptographic security.
-- The implementation has not undergone comprehensive cryptanalysis.
-- Exact equivalence to the original research paper has not been established.
-- The implementation should not be used for real-world data protection.
+- **Weak key bit sensitivity.** Because of the simplified key schedule, the lowest key bits affect only the final key XOR on `R2`. In tests 3A and 3B, flipping key bit 0 changes just 1 of the 64 ciphertext bits. A stronger schedule would change about half of them.
+- **Stage 1 differs from the paper's text.** The paper says the 64-bit plaintext block is XORed with the round key before it is split into four sub-blocks. This implementation instead XORs a 16-bit round key into `L1` only, at the start of each round.
+- **Encryption only.** There is no decryption function.
+- **Integers only.** Plaintext and key are handled as integers (hex input). There is no text encoding, padding, or support for messages longer than one block.
+- **Not verified against official test vectors.** The implementation follows the paper's structure but has not been checked against reference vectors.
 
-## Project Structure
+## Reference
 
-```text
-isl-lws-lightweight-cipher/
-├── isl_lws.py
-└── README.md
-```
-
-## References
-
-Khompysh, A., Kapalova, N., Lizunov, O., Dyusenbayev, D., & Sakan, K. (2023). *Development of a New Lightweight Encryption Algorithm*. **International Journal of Advanced Computer Science and Applications, 14**(5).
-
-- **DOI:** https://doi.org/10.14569/IJACSA.2023.0140548
-- **Publisher page:** https://thesai.org/Publications/ViewPaper?Code=IJACSA&Issue=5&SerialNo=48&Volume=14
-
-The paper is the research reference identified by the CSE461 course specification. The implementation's exact equivalence to the paper has not been independently established.
-
-## Authors
-
-- Omar Shibl
-- Ahmed Walid
-
-## License
-
-Add a valid `LICENSE` file before claiming that the project is distributed under the MIT License. If the repository does not contain a license file, the licensing terms have not been established by this README.
+A. Khompysh, N. Kapalova, O. Lizunov, D. Dyusenbayev, and K. Sakan, "Development of a New Lightweight Encryption Algorithm," *International Journal of Advanced Computer Science and Applications (IJACSA)*, vol. 14, no. 5, pp. 452-459, 2023.
